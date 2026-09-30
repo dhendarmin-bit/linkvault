@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cyber Vault - Smart Link Manager</title>
+  
+  <!-- Tema: diterapkan sedini mungkin agar tidak berkedip -->
+  <script>
+    (function () {
+      var KEY = 'cv_theme', FOLLOW_SYSTEM = false; // ubah ke true untuk mengikuti tema sistem
+      var theme = 'dark';
+      try {
+        var saved = localStorage.getItem(KEY);
+        if (saved === 'light' || saved === 'dark') theme = saved;
+        else if (FOLLOW_SYSTEM && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
+      } catch (e) {}
+      document.documentElement.setAttribute('data-theme', theme);
+      window.CV_THEME_CONFIG = { key: KEY, followSystem: FOLLOW_SYSTEM };
+    })();
+  </script>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#12151b" id="themeColorMeta">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CyberVault">
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <link rel="manifest" id="pwa-manifest">
+  <link rel="icon" id="dynamic-favicon" type="image/png">
+  <link rel="apple-touch-icon" id="apple-touch-icon">
+  <meta name="msapplication-TileColor" content="#12151b">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- SheetJS (xlsx) untuk Ekspor Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <script>
+    const _c = (v) => `rgb(var(--${v}-rgb) / <alpha-value>)`;
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            vault: { bg: _c('bg'), card: _c('surface'), cyan: _c('accent'), magenta: _c('accent-2') },
+            base: _c('bg'), surface: _c('surface'),
+            accent: _c('accent'), 'accent-fg': _c('accent-fg'),
+            'accent-2': _c('accent-2'), 'accent-2-fg': _c('accent-2-fg'),
+            danger: _c('danger'), 'danger-fg': _c('danger-fg'), 'danger-strong': _c('danger-strong'),
+            txt: 'var(--text-primary)', ts: 'var(--text-secondary)',
+            line: 'var(--border)', 'line-strong': 'var(--border-strong)',
+            hov: 'var(--hover)', 'on-accent': 'var(--on-accent)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* ===== THEME TOKENS ===== (Dark = default, Light = [data-theme="light"]) */
+    :root {
+      /* RGB triplet: dipakai Tailwind agar opacity (bg-accent/10) tetap jalan */
+      --bg-rgb: 18 21 27;          /* #12151b */
+      --surface-rgb: 28 33 43;     /* #1c212b */
+      --accent-rgb: 255 122 31;    /* #ff7a1f */
+      --accent-2-rgb: 45 212 191;  /* #2dd4bf */
+      --danger-rgb: 239 68 68;     /* #ef4444 */
+
+      --bg: rgb(var(--bg-rgb));
+      --surface: rgb(var(--surface-rgb));
+      --accent: rgb(var(--accent-rgb));
+      --accent-2: rgb(var(--accent-2-rgb));
+      --danger: rgb(var(--danger-rgb));
+
+      /* Varian teks/solid yang lolos WCAG AA */
+      --accent-fg-rgb: 255 122 31;
+      --accent-2-fg-rgb: 45 212 191;
+      --danger-fg-rgb: 248 113 113;
+      --danger-strong-rgb: 185 28 28;
+      --on-accent: #12151b;
+
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --border: rgba(255, 255, 255, 0.10);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --hover: rgba(255, 255, 255, 0.06);
+      --active: rgba(255, 122, 31, 0.15);
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      --grid-alpha: 0.04;
+    }
+    [data-theme="light"], .light-theme {
+      --bg-rgb: 241 235 220;       /* #f1ebdc */
+      --surface-rgb: 255 255 255;  /* #ffffff */
+      --accent-2-rgb: 13 148 136;  /* #0d9488 */
+
+      --accent-fg-rgb: 163 63 0;   /* #a33f00 (teks oranye, kontras >= 5:1) */
+      --accent-2-fg-rgb: 17 94 89; /* #115e59 */
+      --danger-fg-rgb: 185 28 28;  /* #b91c1c */
+
+      --text-primary: #1c212b;
+      --text-secondary: #4b5563;
+      --border: rgba(28, 33, 43, 0.12);
+      --border-strong: rgba(28, 33, 43, 0.45);
+      --hover: rgba(28, 33, 43, 0.05);
+      --active: rgba(255, 122, 31, 0.12);
+      --shadow: 0 4px 20px rgba(28, 33, 43, 0.10);
+      --grid-alpha: 0.07;
+    }
+
+    html { background: var(--bg); color-scheme: dark; }
+    html[data-theme="light"] { color-scheme: light; }
+    body { background-color: var(--bg); color: var(--text-primary); }
+
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 9999px; }
+
+    .neon-border-cyan { box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.25), inset 0 0 10px rgb(var(--accent-rgb) / 0.1); }
+    .neon-glow-cyan { box-shadow: 0 0 15px rgb(var(--accent-rgb) / 0.6); }
+    .neon-glow-magenta { box-shadow: 0 0 15px rgb(var(--accent-2-rgb) / 0.6); }
+    .vault-grid-bg {
+      background-image: linear-gradient(rgb(var(--accent-2-rgb) / var(--grid-alpha)) 1px, transparent 1px),
+                        linear-gradient(90deg, rgb(var(--accent-2-rgb) / var(--grid-alpha)) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* Light mode: glow neon diganti bayangan lembut */
+    [data-theme="light"] .neon-border-cyan,
+    [data-theme="light"] .neon-glow-cyan,
+    [data-theme="light"] .neon-glow-magenta { box-shadow: var(--shadow); }
+    [data-theme="light"] [class*="shadow-["]:not([class*="drop-shadow-["]) { box-shadow: var(--shadow) !important; }
+    [data-theme="light"] [class*="drop-shadow-["] { filter: none !important; }
+    [data-theme="light"] .bg-black\/85 { background-color: rgb(28 33 43 / 0.55); }
+
+    /* Focus & form */
+    :focus-visible { outline: 3px solid rgb(var(--accent-2-fg-rgb)); outline-offset: 2px; }
+    input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 3px var(--active); }
+
+    /* Transisi tema: hanya aktif sesaat ketika toggle ditekan (tidak mengganggu transisi Tailwind lain) */
+    html.theme-switching,
+    html.theme-switching *,
+    html.theme-switching *::before,
+    html.theme-switching *::after {
+      transition: background-color 250ms ease, color 250ms ease, border-color 250ms ease,
+                  box-shadow 250ms ease, fill 250ms ease, stroke 250ms ease !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+      html.theme-switching, html.theme-switching *,
+      html.theme-switching *::before, html.theme-switching *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-base text-txt antialiased font-sans selection:bg-accent selection:text-on-accent vault-grid-bg">
+  <div id="app" class="min-h-screen flex flex-col pb-24 md:pb-8">
+    
+    <!-- System Toast Notification -->
+    <transition enter-active-class="transition duration-300 ease-out" enter-from-class="transform translate-y-[-100%] opacity-0" enter-to-class="transform translate-y-0 opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="transform translate-y-0 opacity-100" leave-to-class="transform translate-y-[-100%] opacity-0">
+      <div v-if="toast.show" class="fixed top-4 right-4 z-50 flex items-center gap-3 bg-surface border border-accent/60 px-4 py-3 rounded-2xl shadow-[0_0_20px_rgb(var(--accent-rgb)/0.3)] text-xs sm:text-sm font-mono text-accent-fg">
+        <span class="w-2 h-2 rounded-full bg-accent animate-ping"></span>
+        <span>{{ toast.message }}</span>
+      </div>
+    </transition>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-base/90 backdrop-blur-md px-4 py-3">
+      <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+        
+        <div class="flex items-center justify-between w-full sm:w-auto">
+          <div @click="activeTab = 'home'" class="flex items-center gap-2.5 group cursor-pointer select-none">
+            <div class="relative flex items-center justify-center text-accent-fg group-hover:text-accent-2-fg transition-colors duration-300">
+              <svg class="w-7 h-7 transform transition-all duration-300 ease-out group-hover:scale-110 drop-shadow-[0_0_10px_rgb(var(--accent-rgb)/0.8)]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457-.39-2.823-1.07-4" />
+              </svg>
+            </div>
+            <h1 class="font-black text-lg tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-accent-fg via-accent-2-fg to-accent-fg">
+              CYBER VAULT
+            </h1>
+          </div>
+
+          <div class="hidden md:flex items-center gap-2 ml-6 text-xs font-bold uppercase tracking-wider">
+            <button @click="activeTab = 'home'" :class="activeTab === 'home' ? 'text-accent-fg bg-accent/10 border border-accent/50 neon-border-cyan' : 'text-ts hover:text-txt'" class="px-3 py-1.5 rounded-lg transition">Utama</button>
+            <button @click="activeTab = 'folders'" :class="activeTab === 'folders' ? 'text-accent-fg bg-accent/10 border border-accent/50 neon-border-cyan' : 'text-ts hover:text-txt'" class="px-3 py-1.5 rounded-lg transition">Folder</button>
+            <button @click="activeTab = 'favorites'" :class="activeTab === 'favorites' ? 'text-accent-2-fg bg-accent-2/10 border border-accent-2/50 shadow-[0_0_10px_rgb(var(--accent-2-rgb)/0.3)]' : 'text-ts hover:text-txt'" class="px-3 py-1.5 rounded-lg transition">Favorit</button>
+            <button @click="activeTab = 'stats'" :class="activeTab === 'stats' ? 'text-accent-fg bg-accent/10 border border-accent/50 neon-border-cyan' : 'text-ts hover:text-txt'" class="px-3 py-1.5 rounded-lg transition">Sistem</button>
+          </div>
+
+          <button id="themeToggle" type="button" aria-label="Aktifkan light mode" aria-pressed="false" title="Ganti tema"
+            class="ml-3 shrink-0 w-10 h-10 flex items-center justify-center rounded-full border border-line-strong bg-surface text-lg leading-none hover:bg-hov transition">
+            <span id="themeIcon" aria-hidden="true">🌙</span>
+          </button>
+        </div>
+
+        <div class="relative w-full sm:w-64 md:w-80">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Cari tautan, domain, tag..."
+            v-model="searchQuery"
+            class="w-full bg-surface border border-line-strong rounded-full pl-9 pr-4 py-1.5 text-xs sm:text-sm text-accent-fg placeholder-ts focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition shadow-inner"
+          />
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Banner PWA -->
+    <div v-if="deferredPrompt" class="bg-surface border border-accent/40 mx-4 mt-3 rounded-2xl px-4 py-2.5 max-w-5xl md:mx-auto neon-border-cyan">
+      <div class="flex items-center justify-between text-xs text-accent-fg">
+        <span class="font-medium tracking-wide">Install Cyber Vault ke Perangkat untuk Akses Cepat</span>
+        <button @click="installPWA" class="bg-accent hover:bg-accent/80 text-on-accent font-extrabold px-3 py-1 rounded-lg transition neon-glow-cyan tracking-wider">INSTALL</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-5xl w-full mx-auto px-4 pt-4 flex-1">
+      
+      <!-- Tab 1: Utama -->
+      <div v-if="activeTab === 'home'" class="space-y-6">
+        
+        <!-- Metrics -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-surface border border-accent/30 rounded-2xl p-3.5 sm:p-4 neon-border-cyan">
+            <span class="text-[10px] sm:text-xs text-ts font-mono uppercase tracking-widest">Total Links</span>
+            <p class="text-xl sm:text-2xl font-black text-accent-fg mt-1 drop-shadow-[0_0_10px_rgb(var(--accent-rgb)/0.6)]">{{ links.length }}</p>
+          </div>
+          <div class="bg-surface border border-accent-2/30 rounded-2xl p-3.5 sm:p-4 shadow-[0_0_10px_rgb(var(--accent-2-rgb)/0.15)]">
+            <span class="text-[10px] sm:text-xs text-ts font-mono uppercase tracking-widest">Favorites</span>
+            <p class="text-xl sm:text-2xl font-black text-accent-2-fg mt-1 drop-shadow-[0_0_10px_rgb(var(--accent-2-rgb)/0.6)]">{{ favoriteCount }}</p>
+          </div>
+          <div class="bg-surface border border-accent/30 rounded-2xl p-3.5 sm:p-4 neon-border-cyan">
+            <span class="text-[10px] sm:text-xs text-ts font-mono uppercase tracking-widest">Folders</span>
+            <p class="text-xl sm:text-2xl font-black text-accent-fg mt-1 drop-shadow-[0_0_10px_rgb(var(--accent-rgb)/0.6)]">{{ folders.length }}</p>
+          </div>
+          <div class="bg-surface border border-accent-2/30 rounded-2xl p-3.5 sm:p-4 shadow-[0_0_10px_rgb(var(--accent-2-rgb)/0.15)]">
+            <span class="text-[10px] sm:text-xs text-ts font-mono uppercase tracking-widest">Total Clicks</span>
+            <p class="text-xl sm:text-2xl font-black text-accent-2-fg mt-1 drop-shadow-[0_0_10px_rgb(var(--accent-2-rgb)/0.6)]">{{ totalClicks }}</p>
+          </div>
+        </div>
+
+        <!-- Folder Active Bar -->
+        <div v-if="selectedFolder !== 'all'" class="flex items-center justify-between bg-surface border border-accent/40 px-4 py-2 rounded-xl text-xs text-accent-fg">
+          <span>Filter Folder: <strong class="text-txt">{{ getFolderName(selectedFolder) }}</strong></span>
+          <button @click="selectedFolder = 'all'" class="text-ts hover:text-accent-fg transition uppercase tracking-wider text-[10px] font-bold">Bersihkan Filter</button>
+        </div>
+
+        <!-- Tag Filter Cloud -->
+        <div v-if="allTags.length > 0" class="space-y-2">
+          <span class="text-[10px] sm:text-xs font-bold text-ts tracking-widest font-mono">FILTER TAGS</span>
+          <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+            <button
+              @click="selectedTag = null"
+              :class="selectedTag === null ? 'bg-accent text-on-accent font-extrabold neon-glow-cyan' : 'bg-surface text-ts border border-line hover:border-accent/40'"
+              class="px-2.5 py-1 rounded-full text-xs font-medium transition"
+            >Semua</button>
+            <button
+              v-for="tag in allTags"
+              :key="tag"
+              @click="selectedTag = selectedTag === tag ? null : tag"
+              :class="selectedTag === tag ? 'bg-accent text-on-accent font-extrabold neon-glow-cyan' : 'bg-surface text-ts border border-line hover:border-accent/40'"
+              class="px-2.5 py-1 rounded-full text-xs font-mono transition"
+            >#{{ tag }}</button>
+          </div>
+        </div>
+
+        <!-- Links Cards -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-bold text-accent-fg tracking-widest uppercase font-mono">Daftar Tautan Tersimpan</h2>
+            <button @click="exportExcel" class="flex items-center gap-1.5 bg-accent/10 hover:bg-accent/20 text-accent-fg border border-accent/30 px-3 py-1 rounded-xl text-xs font-semibold transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span>Export Excel</span>
+            </button>
+          </div>
+
+          <div v-if="filteredLinks.length === 0" class="text-center py-12 bg-surface/40 rounded-2xl border border-dashed border-accent/20">
+            <p class="text-ts text-sm font-mono">SYSTEM: Tidak ada tautan ditemukan.</p>
+          </div>
+          
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div v-for="link in filteredLinks" :key="link.id" 
+              :class="link.isPinned ? 'border-accent bg-surface/90 neon-border-cyan' : 'border-line bg-surface'"
+              class="border hover:border-accent/60 rounded-2xl p-4 transition duration-300 flex flex-col justify-between space-y-3 hover:shadow-[0_0_20px_rgb(var(--accent-rgb)/0.15)] relative">
+              
+              <div class="space-y-2">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <img :src="link.favicon" alt="" class="w-8 h-8 rounded-lg bg-base p-1 shrink-0 border border-accent/30" @error="handleImageError" />
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5">
+                        <span v-if="link.isPinned" class="text-[9px] bg-accent text-on-accent font-extrabold px-1.5 rounded uppercase">Pinned</span>
+                        <h3 @click="openLink(link)" class="font-semibold text-txt hover:text-accent-fg cursor-pointer truncate text-sm transition">{{ link.title }}</h3>
+                      </div>
+                      <span class="text-xs text-accent-fg font-mono block truncate">{{ link.domain }}</span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-1">
+                    <button @click="togglePin(link.id)" class="p-1 rounded text-ts hover:text-accent-fg" title="Pin Link">
+                      <svg class="w-4 h-4" :class="{'text-accent-fg fill-current': link.isPinned}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                    </button>
+                    <button @click="toggleFavorite(link.id)" :class="link.isFavorite ? 'text-accent-2-fg' : 'text-ts hover:text-ts'" class="p-1 rounded transition shrink-0">
+                      <svg class="w-4 h-4 fill-current drop-shadow-[0_0_8px_rgb(var(--accent-2-rgb)/0.8)]" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <p v-if="link.description" class="text-xs text-ts line-clamp-2 leading-relaxed">{{ link.description }}</p>
+
+                <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span class="text-[10px] bg-base text-accent-fg border border-accent/30 px-2 py-0.5 rounded-md font-mono">{{ getFolderName(link.folderId) }}</span>
+                  <span v-for="tag in link.tags" :key="tag" class="text-[10px] bg-base text-accent-2-fg border border-accent-2/30 px-2 py-0.5 rounded-md font-mono">#{{ tag }}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between border-t border-line pt-3 text-xs text-ts mt-auto">
+                <div class="flex items-center gap-1">
+                  <button @click="copyUrl(link)" class="p-1.5 hover:bg-base rounded-lg transition flex items-center gap-1 text-ts">
+                    <svg v-if="copiedId === link.id" class="w-3.5 h-3.5 text-accent-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  </button>
+                  <button @click="editLink(link)" class="p-1.5 hover:bg-base rounded-lg transition text-ts hover:text-accent-fg">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                  </button>
+                  <button @click="shareLink(link)" class="p-1.5 hover:bg-base rounded-lg transition text-ts hover:text-accent-fg">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                  </button>
+                  <button @click="deleteLink(link.id)" class="p-1.5 hover:bg-danger/10 hover:text-danger-fg rounded-lg transition text-ts">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  </button>
+                </div>
+
+                <button @click="openLink(link)" class="flex items-center gap-1.5 bg-accent/10 hover:bg-accent/20 text-accent-fg border border-accent/30 px-3 py-1.5 rounded-lg font-bold transition text-xs font-mono tracking-wider">
+                  <span>BUKA</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Folder -->
+      <div v-if="activeTab === 'folders'" class="space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent-fg to-accent-2-fg font-mono tracking-wider">KATEGORI / FOLDER</h2>
+          <button @click="openAddFolderModal" class="text-accent-fg hover:text-accent-2-fg transition duration-200" title="Tambah Folder">
+            <svg class="w-6 h-6 drop-shadow-[0_0_8px_rgb(var(--accent-rgb)/0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div v-for="folder in folders" :key="folder.id" class="bg-surface border border-line p-4 rounded-2xl flex items-center justify-between hover:border-accent/50 transition shadow-md">
+            <div @click="selectedFolder = folder.id; activeTab = 'home'" class="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+              <div class="p-2.5 bg-accent/10 text-accent-fg rounded-xl border border-accent/20 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="font-semibold text-txt truncate text-sm sm:text-base">{{ folder.name }}</h3>
+                <p class="text-xs text-accent-fg font-mono">{{ getLinkCountByFolder(folder.id) }} Tautan</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1 shrink-0">
+              <button @click="openEditFolderModal(folder)" class="p-1.5 hover:bg-base rounded-lg text-ts hover:text-accent-fg transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button v-if="folder.id !== 'general'" @click="deleteFolder(folder)" class="p-1.5 hover:bg-danger/10 text-ts hover:text-danger-fg rounded-lg transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Favorit -->
+      <div v-if="activeTab === 'favorites'" class="space-y-3">
+        <h2 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent-2-fg to-accent-fg font-mono tracking-wider">TAUTAN FAVORIT</h2>
+        <div v-if="favoriteLinks.length === 0" class="text-center py-12 bg-surface/40 rounded-2xl border border-dashed border-accent-2/20">
+          <p class="text-ts text-sm font-mono">SYSTEM: Belum ada tautan favorit.</p>
+        </div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div v-for="link in favoriteLinks" :key="link.id" class="bg-surface border border-line rounded-2xl p-4 space-y-3 hover:border-accent-2/50 transition shadow-[0_0_15px_rgb(var(--accent-2-rgb)/0.1)]">
+            <div class="flex items-center justify-between gap-2">
+              <h3 @click="openLink(link)" class="font-medium text-txt cursor-pointer hover:text-accent-2-fg text-sm truncate">{{ link.title }}</h3>
+              <button @click="toggleFavorite(link.id)" class="text-accent-2-fg bg-accent-2/10 p-1.5 rounded-lg shrink-0">
+                <svg class="w-4 h-4 fill-current drop-shadow-[0_0_8px_rgb(var(--accent-2-rgb)/0.8)]" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              </button>
+            </div>
+            <span class="text-xs text-accent-fg block font-mono truncate">{{ link.domain }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Sistem & Data -->
+      <div v-if="activeTab === 'stats'" class="space-y-6">
+        <h2 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-accent-fg to-accent-2-fg font-mono tracking-wider">PENGATURAN & BACKUP</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-surface border border-accent/30 rounded-2xl p-4 space-y-3 flex flex-col justify-between neon-border-cyan">
+            <div>
+              <h3 class="text-sm font-semibold text-accent-fg font-mono uppercase">Ekspor Excel Spreadsheet</h3>
+              <p class="text-xs text-ts mt-1">Unduh seluruh daftar tautan lengkap dalam format standar Excel (.xlsx).</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <button @click="exportExcel" class="flex-1 flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 text-on-accent font-extrabold py-2.5 rounded-xl text-sm transition neon-glow-cyan uppercase tracking-wider">
+                Ekspor Excel
+              </button>
+              <label class="flex-1 flex items-center justify-center gap-2 bg-base hover:bg-hov text-accent-fg border border-accent/50 py-2.5 rounded-xl text-sm font-extrabold cursor-pointer transition uppercase tracking-wider">
+                Import Excel
+                <input type="file" accept=".xlsx,.xls" @change="importExcel" class="hidden" />
+              </label>
+            </div>
+            <p class="text-[10px] text-ts">Import akan membaca kolom: Judul, URL, Domain, Folder, Tags, Favorit, Klik, Deskripsi (sesuai format Export).</p>
+          </div>
+
+          <div class="bg-surface border border-line rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+            <div>
+              <h3 class="text-sm font-semibold text-ts font-mono uppercase">Backup & Restore JSON</h3>
+              <p class="text-xs text-ts mt-1">Simpan atau pulihkan cadangan basis data lokal aplikasi secara utuh.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <button @click="exportJSON" class="flex-1 flex items-center justify-center gap-2 bg-base hover:bg-hov text-accent-fg border border-accent/30 py-2.5 rounded-xl text-xs font-medium transition">
+                Export JSON
+              </button>
+              <label class="flex-1 flex items-center justify-center gap-2 bg-base hover:bg-hov text-accent-fg border border-accent/30 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition">
+                Import JSON
+                <input type="file" accept=".json" @change="importJSON" class="hidden" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-surface border border-danger/30 rounded-2xl p-4 space-y-3">
+          <h3 class="text-sm font-semibold text-danger-fg font-mono uppercase">Zona Bahaya</h3>
+          <p class="text-xs text-ts">Menghapus seluruh daftar tautan & folder lokal aplikasi.</p>
+          <button @click="clearAllData" class="w-full flex items-center justify-center gap-2 bg-danger/20 hover:bg-danger-strong text-danger-fg hover:text-white border border-danger/40 font-bold py-2.5 rounded-xl text-sm transition">
+            Clear Semua Data
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- FAB Add Link -->
+    <button @click="openAddModal" class="fixed right-5 bottom-20 md:bottom-8 z-40 bg-gradient-to-tr from-accent to-accent-2 text-on-accent font-extrabold p-3.5 sm:p-4 rounded-full shadow-[0_0_20px_rgb(var(--accent-rgb)/0.6)] transition active:scale-95 flex items-center justify-center">
+      <svg class="w-6 h-6 stroke-[3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+    </button>
+
+    <!-- Bottom Mobile Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 bg-base/90 backdrop-blur-lg px-6 py-2 pb-safe md:hidden">
+      <div class="max-w-md mx-auto flex justify-between items-center text-xs">
+        <button @click="activeTab = 'home'" :class="activeTab === 'home' ? 'text-accent-fg' : 'text-ts'" class="flex flex-col items-center gap-1 py-1 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          <span class="font-bold text-[10px] tracking-wider uppercase font-mono">Utama</span>
+        </button>
+        <button @click="activeTab = 'folders'" :class="activeTab === 'folders' ? 'text-accent-fg' : 'text-ts'" class="flex flex-col items-center gap-1 py-1 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          <span class="font-bold text-[10px] tracking-wider uppercase font-mono">Folder</span>
+        </button>
+        <button @click="activeTab = 'favorites'" :class="activeTab === 'favorites' ? 'text-accent-2-fg' : 'text-ts'" class="flex flex-col items-center gap-1 py-1 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+          <span class="font-bold text-[10px] tracking-wider uppercase font-mono">Favorit</span>
+        </button>
+        <button @click="activeTab = 'stats'" :class="activeTab === 'stats' ? 'text-accent-fg' : 'text-ts'" class="flex flex-col items-center gap-1 py-1 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span class="font-bold text-[10px] tracking-wider uppercase font-mono">Sistem</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Modal Form Tambah / Edit Link -->
+    <div v-if="isAddOpen" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div class="bg-surface border border-accent/40 w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 shadow-[0_0_35px_rgb(var(--accent-rgb)/0.25)] max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center sticky top-0 bg-surface pt-1 pb-2 z-10 border-b border-line">
+          <h3 class="font-bold text-base sm:text-lg text-transparent bg-clip-text bg-gradient-to-r from-accent-fg to-accent-2-fg font-mono tracking-wider">
+            {{ editingLinkId ? 'EDIT TAUTAN' : 'TAMBAH TAUTAN BARU' }}
+          </h3>
+          <button @click="isAddOpen = false" class="text-ts hover:text-accent-fg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveLink" class="space-y-3 pt-2">
+          <div>
+            <label class="text-xs text-accent-fg font-bold font-mono uppercase">URL *</label>
+            <input type="text" required placeholder="https://example.com" v-model="formData.url" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent" />
+          </div>
+
+          <div>
+            <label class="text-xs text-accent-fg font-bold font-mono uppercase">Judul Tautan</label>
+            <input type="text" placeholder="Kosongkan untuk otomatis mengisi domain" v-model="formData.title" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent" />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-accent-fg font-bold font-mono uppercase">Folder</label>
+              <select v-model="formData.folderId" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent">
+                <option v-for="f in folders" :key="f.id" :value="f.id">{{ f.name }}</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-xs text-accent-fg font-bold font-mono uppercase">Tags (Pisah Koma)</label>
+              <input type="text" placeholder="dev, ai, design" v-model="formData.tags" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent" />
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs text-accent-fg font-bold font-mono uppercase">Deskripsi</label>
+            <textarea rows="2" placeholder="Catatan opsional..." v-model="formData.description" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent"></textarea>
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input type="checkbox" id="fav" v-model="formData.isFavorite" class="rounded bg-base border-line-strong text-accent-2-fg focus:ring-0" />
+            <label for="fav" class="text-xs sm:text-sm text-ts">Tandai Favorit</label>
+          </div>
+
+          <button type="submit" class="w-full bg-accent hover:bg-accent/80 text-on-accent font-extrabold py-2.5 rounded-xl transition mt-4 neon-glow-cyan text-sm font-mono tracking-wider uppercase">
+            {{ editingLinkId ? 'PERBARUI TAUTAN' : 'SIMPAN TAUTAN' }}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Form Folder -->
+    <div v-if="isFolderModalOpen" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="bg-surface border border-accent/40 w-full max-w-sm rounded-3xl p-6 space-y-4 shadow-[0_0_35px_rgb(var(--accent-rgb)/0.25)]">
+        <div class="flex justify-between items-center">
+          <h3 class="font-bold text-base sm:text-lg text-transparent bg-clip-text bg-gradient-to-r from-accent-fg to-accent-2-fg font-mono tracking-wider">{{ folderForm.id ? 'EDIT FOLDER' : 'FOLDER BARU' }}</h3>
+          <button @click="isFolderModalOpen = false" class="text-ts hover:text-accent-fg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveFolder" class="space-y-4">
+          <div>
+            <label class="text-xs text-accent-fg font-bold font-mono uppercase">Nama Folder *</label>
+            <input type="text" required placeholder="Misal: Kerja, Riset" v-model="folderForm.name" class="w-full bg-base border border-line-strong rounded-xl px-3 py-2 text-xs sm:text-sm text-txt mt-1 focus:outline-none focus:border-accent" />
+          </div>
+
+          <button type="submit" class="w-full bg-accent hover:bg-accent/80 text-on-accent font-extrabold py-2.5 rounded-xl transition neon-glow-cyan text-sm font-mono tracking-wider uppercase">
+            SIMPAN FOLDER
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- PWA ENGINE: Ikon Kustom (Canvas->PNG DataURI), Manifest (Blob), -->
+  <!-- dan pendaftaran Service Worker (best-effort, lihat catatan)     -->
+  <!-- ============================================================ -->
+  <script>
+    (function () {
+      // ---- 1. Helper: gambar ikon "Cyber Vault" (shield + keyhole neon) ----
+      function roundRectPath(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function drawVaultIcon(size, maskable) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        const bgGrad = ctx.createLinearGradient(0, 0, size, size);
+        bgGrad.addColorStop(0, '#12151b');
+        bgGrad.addColorStop(1, '#1c212b');
+        ctx.fillStyle = bgGrad;
+        if (maskable) {
+          ctx.fillRect(0, 0, size, size);
+        } else {
+          roundRectPath(ctx, 0, 0, size, size, size * 0.22);
+          ctx.fill();
+        }
+
+        // Grid aksen tipis ala UI utama
+        ctx.strokeStyle = 'rgba(45,212,191,0.08)';
+        ctx.lineWidth = Math.max(1, size * 0.004);
+        const step = size / 10;
+        for (let i = 1; i < 10; i++) {
+          ctx.beginPath(); ctx.moveTo(i * step, 0); ctx.lineTo(i * step, size); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i * step); ctx.lineTo(size, i * step); ctx.stroke();
+        }
+
+        // Shield / vault shape
+        const pad = maskable ? size * 0.26 : size * 0.16;
+        const s = size - pad * 2;
+        const cx = size / 2;
+        const topY = pad;
+
+        ctx.save();
+        ctx.translate(cx, topY);
+        const w = s * 0.66;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(w / 2, s * 0.14);
+        ctx.lineTo(w / 2, s * 0.44);
+        ctx.bezierCurveTo(w / 2, s * 0.74, w / 4, s * 0.92, 0, s);
+        ctx.bezierCurveTo(-w / 4, s * 0.92, -w / 2, s * 0.74, -w / 2, s * 0.44);
+        ctx.lineTo(-w / 2, s * 0.14);
+        ctx.closePath();
+
+        const strokeGrad = ctx.createLinearGradient(-w / 2, 0, w / 2, s);
+        strokeGrad.addColorStop(0, '#ff7a1f');
+        strokeGrad.addColorStop(1, '#2dd4bf');
+
+        ctx.shadowColor = 'rgba(255,122,31,0.9)';
+        ctx.shadowBlur = size * 0.03;
+        ctx.lineWidth = s * 0.05;
+        ctx.strokeStyle = strokeGrad;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,122,31,0.10)';
+        ctx.fill();
+
+        // Keyhole (lambang vault terkunci)
+        ctx.fillStyle = strokeGrad;
+        ctx.beginPath();
+        ctx.arc(0, s * 0.42, s * 0.10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.05, s * 0.44);
+        ctx.lineTo(s * 0.05, s * 0.44);
+        ctx.lineTo(s * 0.095, s * 0.66);
+        ctx.lineTo(-s * 0.095, s * 0.66);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+        return canvas.toDataURL('image/png');
+      }
+
+      // ---- 2. Generate seluruh ukuran ikon yang dibutuhkan manifest ----
+      const icon192 = drawVaultIcon(192, false);
+      const icon512 = drawVaultIcon(512, false);
+      const iconMaskable192 = drawVaultIcon(192, true);
+      const iconMaskable512 = drawVaultIcon(512, true);
+
+      // Pasang sebagai favicon & apple-touch-icon supaya tidak muncul ikon default/globe
+      document.getElementById('dynamic-favicon').setAttribute('href', icon192);
+      document.getElementById('apple-touch-icon').setAttribute('href', icon192);
+
+      // ---- 3. MANIFEST internal via Blob URL (Data URI JSON) ----
+      const manifestJson = {
+        id: "/cyber-vault",
+        name: "Cyber Vault - Smart Link Manager",
+        short_name: "CyberVault",
+        description: "Manajer tautan, folder & favorit bergaya cyberpunk dengan backup Excel/JSON.",
+        start_url: "./",
+        scope: "./",
+        display: "standalone",
+        orientation: "portrait-primary",
+        background_color: "#12151b",
+        theme_color: "#12151b",
+        categories: ["productivity", "utilities"],
+        icons: [
+          { src: icon192, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: icon512, sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: iconMaskable192, sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: iconMaskable512, sizes: "512x512", type: "image/png", purpose: "maskable" }
+        ]
+      };
+      const manifestBlob = new Blob([JSON.stringify(manifestJson)], { type: 'application/json' });
+      document.getElementById('pwa-manifest').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+      // ---- 4. SERVICE WORKER internal via Blob URL (best-effort) ----
+      // CATATAN JUJUR: spesifikasi W3C Service Worker mewajibkan skema
+      // skrip SW berupa http/https, sehingga blob: akan DITOLAK browser
+      // (Chrome/Firefox/Safari) — ini pembatasan platform, bukan bug kode.
+      // Kita tetap mencoba (siapa tahu ada perubahan kebijakan browser di masa depan),
+      // dan gagal secara diam-diam (silent fallback) tanpa mengganggu aplikasi.
+      // Untungnya, kriteria instalasi PWA Chrome/Edge terbaru TIDAK lagi mewajibkan
+      // Service Worker aktif — cukup manifest valid + HTTPS/localhost — sehingga
+      // tombol "Install" tetap berfungsi normal walau SW ini tidak aktif.
+      if ('serviceWorker' in navigator) {
+        const swSource = `
+          const CACHE_NAME = 'cyber-vault-v1';
+          self.addEventListener('install', (e) => { self.skipWaiting(); });
+          self.addEventListener('activate', (e) => { self.clients.claim(); });
+          self.addEventListener('fetch', (e) => {
+            e.respondWith(
+              caches.open(CACHE_NAME).then(async (cache) => {
+                try {
+                  const fresh = await fetch(e.request);
+                  cache.put(e.request, fresh.clone());
+                  return fresh;
+                } catch (err) {
+                  const cached = await cache.match(e.request);
+                  return cached || Promise.reject(err);
+                }
+              })
+            );
+          });
+        `;
+        try {
+          const swBlob = new Blob([swSource], { type: 'text/javascript' });
+          const swUrl = URL.createObjectURL(swBlob);
+          navigator.serviceWorker.register(swUrl).catch(() => {
+            console.info('[Cyber Vault] Service Worker via Blob URL ditolak browser (dibatasi spesifikasi W3C). Aplikasi tetap berjalan & installable normal via manifest.');
+          });
+        } catch (err) {
+          console.info('[Cyber Vault] Service Worker tidak dapat didaftarkan dari Blob URL:', err);
+        }
+      }
+    })();
+  </script>
+
+  <!-- Script Vue 3 App Logic -->
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const INITIAL_FOLDERS = [
+          { id: 'general', name: 'General' },
+          { id: 'work', name: 'Work' },
+          { id: 'personal', name: 'Personal' },
+          { id: 'learning', name: 'Learning' },
+          { id: 'tools', name: 'Tools' }
+        ];
+
+        const links = ref([]);
+        const folders = ref([]);
+        const activeTab = ref('home');
+        const searchQuery = ref('');
+        const selectedFolder = ref('all');
+        const selectedTag = ref(null);
+        const isAddOpen = ref(false);
+        const isFolderModalOpen = ref(false);
+        const editingLinkId = ref(null);
+        const copiedId = ref(null);
+        const deferredPrompt = ref(null);
+
+        const toast = ref({ show: false, message: '' });
+
+        const showToast = (msg) => {
+          toast.value.message = msg;
+          toast.value.show = true;
+          setTimeout(() => { toast.value.show = false; }, 2500);
+        };
+
+        const formData = ref({
+          url: '',
+          title: '',
+          description: '',
+          folderId: 'general',
+          tags: '',
+          isFavorite: false
+        });
+
+        const folderForm = ref({ id: null, name: '' });
+
+        const loadData = () => {
+          const savedLinks = localStorage.getItem('cv_links');
+          const savedFolders = localStorage.getItem('cv_folders');
+          links.value = savedLinks ? JSON.parse(savedLinks) : [];
+          folders.value = savedFolders ? JSON.parse(savedFolders) : INITIAL_FOLDERS;
+        };
+
+        const saveData = () => {
+          localStorage.setItem('cv_links', JSON.stringify(links.value));
+          localStorage.setItem('cv_folders', JSON.stringify(folders.value));
+        };
+
+        const sanitizeUrl = (rawUrl) => {
+          let url = rawUrl.trim();
+          if (!/^https?:\/\//i.test(url)) {
+            url = 'https://' + url;
+          }
+          return url;
+        };
+
+        const extractDomain = (url) => {
+          try {
+            const parsed = new URL(sanitizeUrl(url));
+            return parsed.hostname.replace(/^www\./, '');
+          } catch {
+            return 'external-link';
+          }
+        };
+
+        const handleImageError = (e) => {
+          e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="%230d9488"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>';
+        };
+
+        const openAddModal = () => {
+          editingLinkId.value = null;
+          formData.value = { url: '', title: '', description: '', folderId: 'general', tags: '', isFavorite: false };
+          isAddOpen.value = true;
+        };
+
+        const editLink = (link) => {
+          editingLinkId.value = link.id;
+          formData.value = {
+            url: link.url,
+            title: link.title,
+            description: link.description || '',
+            folderId: link.folderId,
+            tags: Array.isArray(link.tags) ? link.tags.join(', ') : '',
+            isFavorite: link.isFavorite
+          };
+          isAddOpen.value = true;
+        };
+
+        const saveLink = () => {
+          if (!formData.value.url) return;
+
+          const finalUrl = sanitizeUrl(formData.value.url);
+          const domain = extractDomain(finalUrl);
+          const tagArray = formData.value.tags
+            ? formData.value.tags.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean)
+            : [];
+
+          if (editingLinkId.value) {
+            const idx = links.value.findIndex(l => l.id === editingLinkId.value);
+            if (idx !== -1) {
+              links.value[idx] = {
+                ...links.value[idx],
+                url: finalUrl,
+                title: formData.value.title || domain,
+                domain,
+                description: formData.value.description,
+                favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+                folderId: formData.value.folderId || 'general',
+                tags: tagArray,
+                isFavorite: formData.value.isFavorite
+              };
+              showToast('Tautan berhasil diperbarui');
+            }
+          } else {
+            const newLink = {
+              id: 'l_' + Date.now(),
+              url: finalUrl,
+              title: formData.value.title || domain,
+              domain,
+              description: formData.value.description,
+              favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+              folderId: formData.value.folderId || 'general',
+              tags: tagArray,
+              isFavorite: formData.value.isFavorite,
+              isPinned: false,
+              clickCount: 0,
+              createdAt: new Date().toISOString()
+            };
+            links.value.unshift(newLink);
+            showToast('Tautan baru ditambahkan');
+          }
+
+          saveData();
+          isAddOpen.value = false;
+        };
+
+        const togglePin = (id) => {
+          const link = links.value.find(l => l.id === id);
+          if (link) {
+            link.isPinned = !link.isPinned;
+            saveData();
+            showToast(link.isPinned ? 'Tautan disematkan' : 'Sematkan dilepas');
+          }
+        };
+
+        const toggleFavorite = (id) => {
+          const link = links.value.find(l => l.id === id);
+          if (link) {
+            link.isFavorite = !link.isFavorite;
+            saveData();
+          }
+        };
+
+        const deleteLink = (id) => {
+          links.value = links.value.filter(l => l.id !== id);
+          saveData();
+          showToast('Tautan dihapus');
+        };
+
+        const openLink = (link) => {
+          link.clickCount = (link.clickCount || 0) + 1;
+          saveData();
+          window.open(link.url, '_blank', 'noopener,noreferrer');
+        };
+
+        const copyUrl = (link) => {
+          navigator.clipboard.writeText(link.url);
+          copiedId.value = link.id;
+          showToast('URL Disalin ke Clipboard');
+          setTimeout(() => copiedId.value = null, 2000);
+        };
+
+        const shareLink = async (link) => {
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: link.title, url: link.url });
+            } catch (e) {}
+          } else {
+            copyUrl(link);
+          }
+        };
+
+        const openAddFolderModal = () => {
+          folderForm.value = { id: null, name: '' };
+          isFolderModalOpen.value = true;
+        };
+
+        const openEditFolderModal = (folder) => {
+          folderForm.value = { id: folder.id, name: folder.name };
+          isFolderModalOpen.value = true;
+        };
+
+        const saveFolder = () => {
+          if (!folderForm.value.name.trim()) return;
+
+          if (folderForm.value.id) {
+            const f = folders.value.find(item => item.id === folderForm.value.id);
+            if (f) f.name = folderForm.value.name.trim();
+          } else {
+            folders.value.push({ id: 'f_' + Date.now(), name: folderForm.value.name.trim() });
+          }
+
+          saveData();
+          isFolderModalOpen.value = false;
+          showToast('Folder tersimpan');
+        };
+
+        const deleteFolder = (folder) => {
+          if (folder.id === 'general') return;
+          if (confirm(`Hapus folder "${folder.name}"? Tautan di dalamnya akan dipindah ke General.`)) {
+            links.value.forEach(l => { if (l.folderId === folder.id) l.folderId = 'general'; });
+            folders.value = folders.value.filter(f => f.id !== folder.id);
+            if (selectedFolder.value === folder.id) selectedFolder.value = 'all';
+            saveData();
+            showToast('Folder dihapus');
+          }
+        };
+
+        const clearAllData = () => {
+          if (confirm("Reset seluruh data aplikasi? Tindakan tidak bisa dibatalkan.")) {
+            localStorage.removeItem('cv_links');
+            localStorage.removeItem('cv_folders');
+            links.value = [];
+            folders.value = [...INITIAL_FOLDERS];
+            saveData();
+            showToast('Seluruh data berhasil dihapus');
+          }
+        };
+
+        const exportExcel = () => {
+          if (typeof XLSX === 'undefined') {
+            showToast('Library Excel gagal dimuat');
+            return;
+          }
+
+          const data = links.value.map((l, i) => ({
+            'No': i + 1,
+            'Judul': l.title,
+            'URL': l.url,
+            'Domain': l.domain,
+            'Folder': getFolderName(l.folderId),
+            'Tags': Array.isArray(l.tags) ? l.tags.join(', ') : '',
+            'Favorit': l.isFavorite ? 'Ya' : 'Tidak',
+            'Klik': l.clickCount || 0,
+            'Deskripsi': l.description || ''
+          }));
+
+          const ws = XLSX.utils.json_to_sheet(data);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Links");
+          XLSX.writeFile(wb, `CyberVault_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+          showToast('Export Excel berhasil');
+        };
+
+        const importExcel = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          if (typeof XLSX === 'undefined') {
+            showToast('Library Excel gagal dimuat');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+              const wb = XLSX.read(evt.target.result, { type: 'array' });
+              const sheet = wb.Sheets[wb.SheetNames[0]];
+              const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+              let importedCount = 0;
+              rows.forEach((row) => {
+                const rawUrl = String(row['URL'] || '').trim();
+                if (!rawUrl) return;
+
+                const finalUrl = sanitizeUrl(rawUrl);
+                const domain = String(row['Domain'] || '').trim() || extractDomain(finalUrl);
+                const folderName = String(row['Folder'] || 'General').trim() || 'General';
+
+                let folder = folders.value.find(f => f.name.toLowerCase() === folderName.toLowerCase());
+                if (!folder) {
+                  folder = { id: 'f_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: folderName };
+                  folders.value.push(folder);
+                }
+
+                const tagsRaw = String(row['Tags'] || '');
+                const tagArray = tagsRaw ? tagsRaw.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean) : [];
+                const isFavorite = String(row['Favorit'] || '').trim().toLowerCase() === 'ya';
+                const clickCount = parseInt(row['Klik'], 10) || 0;
+
+                links.value.push({
+                  id: 'l_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                  url: finalUrl,
+                  title: String(row['Judul'] || '').trim() || domain,
+                  domain,
+                  description: String(row['Deskripsi'] || ''),
+                  favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+                  folderId: folder.id,
+                  tags: tagArray,
+                  isFavorite,
+                  isPinned: false,
+                  clickCount,
+                  createdAt: new Date().toISOString()
+                });
+                importedCount++;
+              });
+
+              saveData();
+              showToast(importedCount > 0 ? `${importedCount} tautan berhasil diimport dari Excel` : 'Tidak ada data valid ditemukan di file Excel');
+            } catch (err) {
+              showToast('Gagal membaca file Excel. Pastikan formatnya sesuai hasil Export.');
+            } finally {
+              e.target.value = '';
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        };
+
+        const exportJSON = () => {
+          const blob = new Blob([JSON.stringify({ links: links.value, folders: folders.value }, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `cybervault_backup_${Date.now()}.json`;
+          a.click();
+          showToast('Backup JSON diunduh');
+        };
+
+        const importJSON = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+              const res = JSON.parse(evt.target.result);
+              if (res.links && res.folders) {
+                links.value = res.links;
+                folders.value = res.folders;
+                saveData();
+                showToast('Import JSON Berhasil');
+              }
+            } catch {
+              showToast('Format JSON tidak valid');
+            }
+          };
+          reader.readAsText(file);
+        };
+
+        const installPWA = () => {
+          if (deferredPrompt.value) {
+            deferredPrompt.value.prompt();
+            deferredPrompt.value = null;
+          }
+        };
+
+        const getFolderName = (fId) => (folders.value.find(f => f.id === fId) || {}).name || 'General';
+        const getLinkCountByFolder = (fId) => links.value.filter(l => l.folderId === fId).length;
+
+        const allTags = computed(() => Array.from(new Set(links.value.flatMap(l => l.tags || []))));
+        const favoriteCount = computed(() => links.value.filter(l => l.isFavorite).length);
+        const favoriteLinks = computed(() => links.value.filter(l => l.isFavorite));
+        const totalClicks = computed(() => links.value.reduce((acc, l) => acc + (l.clickCount || 0), 0));
+
+        const filteredLinks = computed(() => {
+          return links.value
+            .filter(link => {
+              const q = searchQuery.value.toLowerCase();
+              const matchesSearch = link.title.toLowerCase().includes(q) ||
+                link.url.toLowerCase().includes(q) ||
+                (link.tags && link.tags.some(t => t.toLowerCase().includes(q)));
+
+              const matchesFolder = selectedFolder.value === 'all' || link.folderId === selectedFolder.value;
+              const matchesTag = !selectedTag.value || (link.tags && link.tags.includes(selectedTag.value));
+
+              return matchesSearch && matchesFolder && matchesTag;
+            })
+            .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+        });
+
+        onMounted(() => {
+          loadData();
+          window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt.value = e;
+          });
+        });
+
+        return {
+          links, folders, activeTab, searchQuery, selectedFolder, selectedTag,
+          isAddOpen, isFolderModalOpen, editingLinkId, copiedId, deferredPrompt,
+          formData, folderForm, toast, allTags, favoriteCount, favoriteLinks, totalClicks, filteredLinks,
+          openAddModal, editLink, saveLink, togglePin, toggleFavorite, deleteLink, openLink, copyUrl, shareLink,
+          openAddFolderModal, openEditFolderModal, saveFolder, deleteFolder, clearAllData,
+          exportExcel, importExcel, exportJSON, importJSON, installPWA, getFolderName, getLinkCountByFolder, handleImageError
+        };
+      }
+    }).mount('#app');
+  </script>
+
+  <!-- Theme system (dijalankan setelah Vue mount agar tombol sudah ada) -->
+  <script>
+    (function () {
+      var cfg = window.CV_THEME_CONFIG || { key: 'cv_theme', followSystem: false };
+      var root = document.documentElement;
+      var META_COLOR = { dark: '#12151b', light: '#f1ebdc' };
+      var timer;
+
+      function readSaved() {
+        try { var s = localStorage.getItem(cfg.key); return (s === 'light' || s === 'dark') ? s : null; }
+        catch (e) { return null; }
+      }
+      function getInitialTheme() {
+        var saved = readSaved();
+        if (saved) return saved;
+        if (cfg.followSystem && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+        return 'dark';
+      }
+      function updateThemeColor(theme) {
+        var meta = document.getElementById('themeColorMeta');
+        if (meta) meta.setAttribute('content', META_COLOR[theme]);
+      }
+      function applyTheme(theme) {
+        root.dataset.theme = theme;
+        updateThemeColor(theme);
+        var toggle = document.getElementById('themeToggle');
+        if (!toggle) return;
+        var isLight = theme === 'light';
+        toggle.setAttribute('aria-pressed', String(isLight));
+        toggle.setAttribute('aria-label', isLight ? 'Aktifkan dark mode' : 'Aktifkan light mode');
+        var icon = document.getElementById('themeIcon');
+        if (icon) icon.textContent = isLight ? '☀️' : '🌙';
+      }
+
+      applyTheme(getInitialTheme());
+
+      // Event delegation: tetap bekerja walaupun Vue me-render ulang header
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('#themeToggle');
+        if (!btn) return;
+        var next = (root.dataset.theme || 'dark') === 'dark' ? 'light' : 'dark';
+        root.classList.add('theme-switching');
+        clearTimeout(timer);
+        timer = setTimeout(function () { root.classList.remove('theme-switching'); }, 350);
+        applyTheme(next);
+        try { localStorage.setItem(cfg.key, next); } catch (err) {}
+      });
+    })();
+  </script>
+</body>
+</html>
